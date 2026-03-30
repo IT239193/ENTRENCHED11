@@ -257,6 +257,7 @@ RunService.RenderStepped:Connect(function()
                 esp.Name.Visible = true
                 currentOffset = currentOffset - (Config.ESP_TextSize + 4)
             else
+                esp.Name.Size = Config.ESP_TextSize
                 esp.Name.Visible = false
             end
             if Config.ESP_Tools then
@@ -269,9 +270,11 @@ RunService.RenderStepped:Connect(function()
                     esp.Tool.Visible = true
                     currentOffset = currentOffset - (Config.ESP_TextSize + 4)
                 else
+                    esp.Tool.Size = Config.ESP_TextSize
                     esp.Tool.Visible = false
                 end
             else
+                esp.Tool.Size = Config.ESP_TextSize
                 esp.Tool.Visible = false
             end
             local pClassObj = plr:GetAttribute("Class")
@@ -293,9 +296,11 @@ RunService.RenderStepped:Connect(function()
                     esp.Class.Visible = true
                     currentOffset = currentOffset - (Config.ESP_TextSize + 4)
                 else
+                    esp.Class.Size = Config.ESP_TextSize
                     esp.Class.Visible = false
                 end
             else
+                esp.Class.Size = Config.ESP_TextSize
                 esp.Class.Visible = false
             end
             if isReviveable then
@@ -305,6 +310,7 @@ RunService.RenderStepped:Connect(function()
                 esp.Revive.Color = Color3.fromRGB(50, 255, 50)
                 esp.Revive.Visible = true
             else
+                esp.Revive.Size = Config.ESP_TextSize
                 esp.Revive.Visible = false
             end
             if Config.ESP_Health and isAlive then
