@@ -948,15 +948,23 @@ TrigTab:CreateInput({
    end,
 })
 local TrigColorPicker = TrigTab:CreateColorPicker({ Name = "Trigger FOV Color", Color = Config.Trig_FOVColor, Flag = "Trig_FOVColor", Callback = function(Value) Config.Trig_FOVColor = Value end })
-ESPTab:CreateToggle({ Name = "Enable ESP", CurrentValue = Config.ESP_Enabled, Flag = "ESP_Enabled", Callback = function(Value) Config.ESP_Enabled = Value end })
-ESPTab:CreateToggle({ Name = "Team Check", CurrentValue = Config.ESP_TeamCheck, Flag = "ESP_TeamCheck", Callback = function(Value) Config.ESP_TeamCheck = Value end })
-ESPTab:CreateToggle({ Name = "Wall Check", CurrentValue = Config.ESP_WallCheck, Flag = "ESP_WallCheck", Callback = function(Value) Config.ESP_WallCheck = Value end })
-ESPFFToggle = ESPTab:CreateToggle({ Name = "ForceField Check", CurrentValue = Config.ESP_FFCheck, Flag = "ESP_FFCheck", Callback = function(Value) Config.ESP_FFCheck = Value end })
-ESPTab:CreateToggle({ Name = "Use Team Colors", CurrentValue = Config.ESP_TeamColor, Flag = "ESP_TeamColor", Callback = function(Value) Config.ESP_TeamColor = Value end })
 ESPTab:CreateSection("Visual Enhancements")
-ESPTab:CreateToggle({ Name = "Show Boxes", CurrentValue = Config.ESP_Boxes, Flag = "ESP_Boxes", Callback = function(Value) Config.ESP_Boxes = Value end })
-ESPTab:CreateToggle({ Name = "Show Names", CurrentValue = Config.ESP_Names, Flag = "ESP_Names", Callback = function(Value) Config.ESP_Names = Value end })
-ESPTab:CreateToggle({ Name = "Show Tools", CurrentValue = Config.ESP_Tools, Flag = "ESP_Tools", Callback = function(Value) Config.ESP_Tools = Value end })
+local ESP_Toggles = {}
+ESP_Toggles.ESP_Enabled = ESPTab:CreateToggle({ Name = "Enable ESP", CurrentValue = Config.ESP_Enabled, Flag = "ESP_Enabled", Callback = function(Value) Config.ESP_Enabled = Value end })
+ESP_Toggles.ESP_TeamCheck = ESPTab:CreateToggle({ Name = "Team Check", CurrentValue = Config.ESP_TeamCheck, Flag = "ESP_TeamCheck", Callback = function(Value) Config.ESP_TeamCheck = Value end })
+ESP_Toggles.ESP_WallCheck = ESPTab:CreateToggle({ Name = "Wall Check", CurrentValue = Config.ESP_WallCheck, Flag = "ESP_WallCheck", Callback = function(Value) Config.ESP_WallCheck = Value end })
+ESP_Toggles.ESP_FFCheck = ESPTab:CreateToggle({ Name = "ForceField Check", CurrentValue = Config.ESP_FFCheck, Flag = "ESP_FFCheck", Callback = function(Value) Config.ESP_FFCheck = Value end })
+ESP_Toggles.ESP_TeamColor = ESPTab:CreateToggle({ Name = "Use Team Colors", CurrentValue = Config.ESP_TeamColor, Flag = "ESP_TeamColor", Callback = function(Value) Config.ESP_TeamColor = Value end })
+
+ESP_Toggles.ESP_Boxes = ESPTab:CreateToggle({ Name = "Show Boxes", CurrentValue = Config.ESP_Boxes, Flag = "ESP_Boxes", Callback = function(Value) Config.ESP_Boxes = Value end })
+ESP_Toggles.ESP_Names = ESPTab:CreateToggle({ Name = "Show Names", CurrentValue = Config.ESP_Names, Flag = "ESP_Names", Callback = function(Value) Config.ESP_Names = Value end })
+ESP_Toggles.ESP_Tools = ESPTab:CreateToggle({ Name = "Show Tools", CurrentValue = Config.ESP_Tools, Flag = "ESP_Tools", Callback = function(Value) Config.ESP_Tools = Value end })
+ESP_Toggles.ESP_Classes = ESPTab:CreateToggle({ Name = "Show Classes", CurrentValue = Config.ESP_Classes, Flag = "ESP_Classes", Callback = function(Value) 
+    Config.ESP_Classes = Value 
+    UpdateClassFilterVisibility()
+end })
+ESP_Toggles.ESP_MedicMode = ESPTab:CreateToggle({ Name = "Medic Mode (Revivables)", CurrentValue = Config.ESP_MedicMode, Flag = "ESP_MedicMode", Callback = function(Value) Config.ESP_MedicMode = Value end })
+ESP_Toggles.ESP_Health = ESPTab:CreateToggle({ Name = "Show Health", CurrentValue = Config.ESP_Health, Flag = "ESP_Health", Callback = function(Value) Config.ESP_Health = Value end })
 local ClassNamesList = {"Rifleman", "Assault", "Support", "Medic", "Skirmisher", "Recon", "Engineer", "Flamer", "Officer"}
 local function UpdateClassFilterVisibility()
     local isVis = Config.ESP_Classes
@@ -983,11 +991,6 @@ local function UpdateClassFilterVisibility()
         end)
     end)
 end
-ESPTab:CreateToggle({ Name = "Show Classes", CurrentValue = Config.ESP_Classes, Flag = "ESP_Classes", Callback = function(Value)
-    Config.ESP_Classes = Value
-    UpdateClassFilterVisibility()
-end })
-ESPTab:CreateToggle({ Name = "Medic Mode (Reviveable ESP)", CurrentValue = Config.ESP_MedicMode, Flag = "ESP_MedicMode", Callback = function(Value) Config.ESP_MedicMode = Value end })
 ESPTab:CreateSection("Class Tracking Filter")
 local ClassToggles = {}
 local MasterClassBtn
@@ -1029,7 +1032,6 @@ updateMasterButtonText()
 UpdateClassFilterVisibility()
 ESPTab:CreateSection("Typography & Health")
 ESPTab:CreateSlider({ Name = "Text Size", Range = {8, 36}, Increment = 1, Suffix = "px", CurrentValue = Config.ESP_TextSize, Flag = "ESP_TextSize", Callback = function(Value) Config.ESP_TextSize = Value end })
-ESPTab:CreateToggle({ Name = "Show Health", CurrentValue = Config.ESP_Health, Flag = "ESP_Health", Callback = function(Value) Config.ESP_Health = Value end })
 ESPTab:CreateSection("Miscellaneous Colors")
 local ESPColorPicker = ESPTab:CreateColorPicker({ Name = "ESP Primary Color", Color = Config.ESP_Color, Flag = "ESP_Color", Callback = function(Value) Config.ESP_Color = Value end })
 local ToolColorPicker = ESPTab:CreateColorPicker({ Name = "Tool Text Color", Color = Config.ESP_ToolColor, Flag = "ESP_ToolColor", Callback = function(Value) Config.ESP_ToolColor = Value end })
@@ -1149,6 +1151,11 @@ local function deserializeIntoConfig(json)
             for cName, cVal in pairs(val) do
                 Config.ESP_ClassFilter[cName] = cVal
             end
+        elseif type(val) == "table" and Config[key] and type(Config[key]) == "table" then
+            -- Deep merge for other tables if any
+            for k, v in pairs(val) do
+                Config[key][k] = v
+            end
         else
             Config[key] = val
         end
@@ -1169,41 +1176,49 @@ end
 
 local function refreshUI()
     if not Rayfield or not Rayfield.Flags then return end
+    
+    -- Sync standard flags
     for key, val in pairs(Config) do
         if key == "ESP_ClassFilter" then continue end
         if string.sub(key, 1, 5) == "Bind_" then continue end
-        local flag = Rayfield.Flags[key]
-        if flag then
-            pcall(function()
-                if DROPDOWN_KEYS[key] then
-                    flag:Set({val})
-                else
-                    flag:Set(val)
-                end
-            end)
+        
+        -- Use specific toggle references for ESP components to force visual sync
+        if ESP_Toggles[key] then
+            pcall(function() ESP_Toggles[key]:Set(val) end)
+        else
+            local flag = Rayfield.Flags[key]
+            if flag then
+                pcall(function()
+                    if DROPDOWN_KEYS[key] then
+                        flag:Set({val})
+                    else
+                        flag:Set(val)
+                    end
+                end)
+            end
         end
     end
-    -- Explicitly sync ForceField toggles using direct references
-    pcall(function() if AimFFToggle then AimFFToggle:Set(Config.Aim_FFCheck) end end)
-    pcall(function() if TrigFFToggle then TrigFFToggle:Set(Config.Trig_FFCheck) end end)
-    pcall(function() if ESPFFToggle then ESPFFToggle:Set(Config.ESP_FFCheck) end end)
-    for cName, toggle in pairs(ClassToggles) do
-        pcall(function() toggle:Set(Config.ESP_ClassFilter[cName]) end)
-    end
+    
+    -- Sync keybinds
     for key, element in pairs(keybindElements) do
         local val = Config[key] or ""
         pcall(function() element:Set(val) end)
     end
+    
+    -- Sync color pickers directly to Rayfield's color system
     pcall(function()
-        if FOVColorPicker then FOVColorPicker:Set(Config.FOVColor) end
-        if TrigColorPicker then TrigColorPicker:Set(Config.Trig_TrigFOVColor or Config.Trig_FOVColor) end
-        if ESPColorPicker then ESPColorPicker:Set(Config.ESP_Color) end
-        if ToolColorPicker then ToolColorPicker:Set(Config.ESP_ToolColor) end
-        if ClassColorPicker then ClassColorPicker:Set(Config.ESP_ClassColor) end
+        if Rayfield.Flags["FOVColor"] then Rayfield.Flags["FOVColor"]:Set(Config.FOVColor) end
+        if Rayfield.Flags["Trig_FOVColor"] then Rayfield.Flags["Trig_FOVColor"]:Set(Config.Trig_FOVColor) end
+        if Rayfield.Flags["ESP_Color"] then Rayfield.Flags["ESP_Color"]:Set(Config.ESP_Color) end
+        if Rayfield.Flags["ESP_ToolColor"] then Rayfield.Flags["ESP_ToolColor"]:Set(Config.ESP_ToolColor) end
+        if Rayfield.Flags["ESP_ClassColor"] then Rayfield.Flags["ESP_ClassColor"]:Set(Config.ESP_ClassColor) end
     end)
+    
+    -- Refresh visibility of grouped elements
     pcall(UpdateWeightVisibility)
     pcall(UpdateMissVisibility)
     pcall(UpdateClassFilterVisibility)
+    pcall(updateMasterButtonText)
 end
 
 local function saveConfig(name)
