@@ -694,6 +694,51 @@ local function CASBind(Tab, Name, ActionID, ConfigKey, Callback)
         Callback = function() end,
     })
     keybindElements[ConfigKey] = keybindObj
+    
+    task.spawn(function()
+        task.wait(1.5)
+        pcall(function()
+            local guiParent = game:GetService("CoreGui")
+            if gethui then pcall(function() guiParent = gethui() end) end
+            
+            for _, desc in ipairs(guiParent:GetDescendants()) do
+                if desc:IsA("TextLabel") and desc.Text == Name and desc.Parent and desc.Parent:IsA("Frame") then
+                    local container = desc.Parent
+                    
+                    if container:FindFirstChild("ClearBtn") then continue end
+                    
+                    local clearBtn = Instance.new("TextButton")
+                    clearBtn.Name = "ClearBtn"
+                    clearBtn.Size = UDim2.new(0, 24, 0, 24)
+                    clearBtn.Position = UDim2.new(1, -145, 0.5, 0)
+                    clearBtn.AnchorPoint = Vector2.new(1, 0.5)
+                    clearBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                    clearBtn.TextColor3 = Color3.fromRGB(220, 60, 60)
+                    clearBtn.TextSize = 14
+                    clearBtn.Font = Enum.Font.GothamBold
+                    clearBtn.Text = "X"
+                    clearBtn.BorderSizePixel = 0
+                    clearBtn.ZIndex = 50
+                    
+                    local corner = Instance.new("UICorner", clearBtn)
+                    corner.CornerRadius = UDim.new(0, 4)
+                    
+                    clearBtn.Parent = container
+                    
+                    clearBtn.MouseEnter:Connect(function()
+                        clearBtn.BackgroundColor3 = Color3.fromRGB(70, 40, 40)
+                    end)
+                    clearBtn.MouseLeave:Connect(function()
+                        clearBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                    end)
+                    
+                    clearBtn.MouseButton1Click:Connect(function()
+                        pcall(function() keybindObj:Set("None") end)
+                    end)
+                end
+            end
+        end)
+    end)
 
     task.spawn(function()
         local lastKey = Config[ConfigKey] or ""
@@ -709,26 +754,27 @@ local function CASBind(Tab, Name, ActionID, ConfigKey, Callback)
             return nil
         end
 
-        local connBegan
-        local connEnded
-
         local function updateBind(kc)
-            if connBegan then connBegan:Disconnect() connBegan = nil end
-            if connEnded then connEnded:Disconnect() connEnded = nil end
-            
+            CAS:UnbindAction(ActionID)
             if not kc then return end
             
-            connBegan = UIS.InputBegan:Connect(function(input, gpe)
-                if UIS:GetFocusedTextBox() then return end
-                if input.KeyCode == kc or input.UserInputType == kc then
-                    Callback(true)
+            CAS:BindActionAtPriority(ActionID, function(actionName, inputState, inputObject)
+                if UIS:GetFocusedTextBox() then 
+                    return Enum.ContextActionResult.Pass 
                 end
-            end)
-            connEnded = UIS.InputEnded:Connect(function(input, gpe)
-                if input.KeyCode == kc or input.UserInputType == kc then
+
+                if inputState == Enum.UserInputState.Begin then
+                    Callback(true)
+                elseif inputState == Enum.UserInputState.End then
                     Callback(false)
                 end
-            end)
+                
+                if inputObject.UserInputType == Enum.UserInputType.MouseButton1 or inputObject.UserInputType == Enum.UserInputType.MouseButton2 then
+                    return Enum.ContextActionResult.Pass
+                end
+                
+                return Enum.ContextActionResult.Sink
+            end, false, 100000, kc)
         end
 
         if lastKey ~= "" and lastKey ~= nil then
