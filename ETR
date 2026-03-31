@@ -950,21 +950,7 @@ TrigTab:CreateInput({
 local TrigColorPicker = TrigTab:CreateColorPicker({ Name = "Trigger FOV Color", Color = Config.Trig_FOVColor, Flag = "Trig_FOVColor", Callback = function(Value) Config.Trig_FOVColor = Value end })
 ESPTab:CreateSection("Visual Enhancements")
 local ESP_Toggles = {}
-ESP_Toggles.ESP_Enabled = ESPTab:CreateToggle({ Name = "Enable ESP", CurrentValue = Config.ESP_Enabled, Flag = "ESP_Enabled", Callback = function(Value) Config.ESP_Enabled = Value end })
-ESP_Toggles.ESP_TeamCheck = ESPTab:CreateToggle({ Name = "Team Check", CurrentValue = Config.ESP_TeamCheck, Flag = "ESP_TeamCheck", Callback = function(Value) Config.ESP_TeamCheck = Value end })
-ESP_Toggles.ESP_WallCheck = ESPTab:CreateToggle({ Name = "Wall Check", CurrentValue = Config.ESP_WallCheck, Flag = "ESP_WallCheck", Callback = function(Value) Config.ESP_WallCheck = Value end })
-ESP_Toggles.ESP_FFCheck = ESPTab:CreateToggle({ Name = "ForceField Check", CurrentValue = Config.ESP_FFCheck, Flag = "ESP_FFCheck", Callback = function(Value) Config.ESP_FFCheck = Value end })
-ESP_Toggles.ESP_TeamColor = ESPTab:CreateToggle({ Name = "Use Team Colors", CurrentValue = Config.ESP_TeamColor, Flag = "ESP_TeamColor", Callback = function(Value) Config.ESP_TeamColor = Value end })
 
-ESP_Toggles.ESP_Boxes = ESPTab:CreateToggle({ Name = "Show Boxes", CurrentValue = Config.ESP_Boxes, Flag = "ESP_Boxes", Callback = function(Value) Config.ESP_Boxes = Value end })
-ESP_Toggles.ESP_Names = ESPTab:CreateToggle({ Name = "Show Names", CurrentValue = Config.ESP_Names, Flag = "ESP_Names", Callback = function(Value) Config.ESP_Names = Value end })
-ESP_Toggles.ESP_Tools = ESPTab:CreateToggle({ Name = "Show Tools", CurrentValue = Config.ESP_Tools, Flag = "ESP_Tools", Callback = function(Value) Config.ESP_Tools = Value end })
-ESP_Toggles.ESP_Classes = ESPTab:CreateToggle({ Name = "Show Classes", CurrentValue = Config.ESP_Classes, Flag = "ESP_Classes", Callback = function(Value) 
-    Config.ESP_Classes = Value 
-    UpdateClassFilterVisibility()
-end })
-ESP_Toggles.ESP_MedicMode = ESPTab:CreateToggle({ Name = "Medic Mode (Revivables)", CurrentValue = Config.ESP_MedicMode, Flag = "ESP_MedicMode", Callback = function(Value) Config.ESP_MedicMode = Value end })
-ESP_Toggles.ESP_Health = ESPTab:CreateToggle({ Name = "Show Health", CurrentValue = Config.ESP_Health, Flag = "ESP_Health", Callback = function(Value) Config.ESP_Health = Value end })
 local ClassNamesList = {"Rifleman", "Assault", "Support", "Medic", "Skirmisher", "Recon", "Engineer", "Flamer", "Officer"}
 local function UpdateClassFilterVisibility()
     local isVis = Config.ESP_Classes
@@ -991,6 +977,22 @@ local function UpdateClassFilterVisibility()
         end)
     end)
 end
+
+ESP_Toggles.ESP_Enabled = ESPTab:CreateToggle({ Name = "Enable ESP", CurrentValue = Config.ESP_Enabled, Flag = "ESP_Enabled", Callback = function(Value) Config.ESP_Enabled = Value end })
+ESP_Toggles.ESP_TeamCheck = ESPTab:CreateToggle({ Name = "Team Check", CurrentValue = Config.ESP_TeamCheck, Flag = "ESP_TeamCheck", Callback = function(Value) Config.ESP_TeamCheck = Value end })
+ESP_Toggles.ESP_WallCheck = ESPTab:CreateToggle({ Name = "Wall Check", CurrentValue = Config.ESP_WallCheck, Flag = "ESP_WallCheck", Callback = function(Value) Config.ESP_WallCheck = Value end })
+ESP_Toggles.ESP_FFCheck = ESPTab:CreateToggle({ Name = "ForceField Check", CurrentValue = Config.ESP_FFCheck, Flag = "ESP_FFCheck", Callback = function(Value) Config.ESP_FFCheck = Value end })
+ESP_Toggles.ESP_TeamColor = ESPTab:CreateToggle({ Name = "Use Team Colors", CurrentValue = Config.ESP_TeamColor, Flag = "ESP_TeamColor", Callback = function(Value) Config.ESP_TeamColor = Value end })
+
+ESP_Toggles.ESP_Boxes = ESPTab:CreateToggle({ Name = "Show Boxes", CurrentValue = Config.ESP_Boxes, Flag = "ESP_Boxes", Callback = function(Value) Config.ESP_Boxes = Value end })
+ESP_Toggles.ESP_Names = ESPTab:CreateToggle({ Name = "Show Names", CurrentValue = Config.ESP_Names, Flag = "ESP_Names", Callback = function(Value) Config.ESP_Names = Value end })
+ESP_Toggles.ESP_Tools = ESPTab:CreateToggle({ Name = "Show Tools", CurrentValue = Config.ESP_Tools, Flag = "ESP_Tools", Callback = function(Value) Config.ESP_Tools = Value end })
+ESP_Toggles.ESP_Classes = ESPTab:CreateToggle({ Name = "Show Classes", CurrentValue = Config.ESP_Classes, Flag = "ESP_Classes", Callback = function(Value) 
+    Config.ESP_Classes = Value 
+    UpdateClassFilterVisibility()
+end })
+ESP_Toggles.ESP_MedicMode = ESPTab:CreateToggle({ Name = "Medic Mode (Revivables)", CurrentValue = Config.ESP_MedicMode, Flag = "ESP_MedicMode", Callback = function(Value) Config.ESP_MedicMode = Value end })
+ESP_Toggles.ESP_Health = ESPTab:CreateToggle({ Name = "Show Health", CurrentValue = Config.ESP_Health, Flag = "ESP_Health", Callback = function(Value) Config.ESP_Health = Value end })
 ESPTab:CreateSection("Class Tracking Filter")
 local ClassToggles = {}
 local MasterClassBtn
@@ -1214,6 +1216,13 @@ local function refreshUI()
         if Rayfield.Flags["ESP_ClassColor"] then Rayfield.Flags["ESP_ClassColor"]:Set(Config.ESP_ClassColor) end
     end)
     
+    -- Sync Class Toggles
+    if ClassToggles then
+        for cName, toggle in pairs(ClassToggles) do
+            pcall(function() toggle:Set(Config.ESP_ClassFilter[cName] or false) end)
+        end
+    end
+
     -- Refresh visibility of grouped elements
     pcall(UpdateWeightVisibility)
     pcall(UpdateMissVisibility)
