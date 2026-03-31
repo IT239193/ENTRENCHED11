@@ -47,6 +47,10 @@ getgenv().Config = {
     Trig_FOVRadius = 100,
     Trig_ShowFOV   = false,
     Trig_FOVColor  = Color3.fromRGB(255, 60, 60),
+    Trig_DistanceCheck = false,
+    Trig_MaxDistance = 500,
+    Aim_HoldMode   = false,
+    Trig_HoldMode  = false,
     ESP_Enabled   = false,
     ESP_MedicMode = false,
     ESP_Boxes     = false,
@@ -516,6 +520,10 @@ RunService.RenderStepped:Connect(function()
             local hrp = char:FindFirstChild("HumanoidRootPart")
             local head = char:FindFirstChild("Head")
             if not hrp or not head then continue end
+            if Config.Trig_DistanceCheck then
+                local lpHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if lpHrp and (hrp.Position - lpHrp.Position).Magnitude > Config.Trig_MaxDistance then continue end
+            end
             local checkParts = {head, hrp, char:FindFirstChild("UpperTorso"), char:FindFirstChild("LowerTorso")}
             for _, cp in ipairs(checkParts) do
                 if not cp then continue end
@@ -693,7 +701,8 @@ local function CASBind(Tab, Name, ActionID, ConfigKey, Callback)
             if s and kc then
                 currentKeycode = kc
                 CAS:BindActionAtPriority(ActionID, function(_, state)
-                    if state == Enum.UserInputState.Begin then Callback() end
+                    if state == Enum.UserInputState.Begin then Callback(true)
+                    elseif state == Enum.UserInputState.End then Callback(false) end
                     return Enum.ContextActionResult.Sink
                 end, false, 99999, kc)
             end
@@ -713,7 +722,8 @@ local function CASBind(Tab, Name, ActionID, ConfigKey, Callback)
                         if s and kc then
                             currentKeycode = kc
                             CAS:BindActionAtPriority(ActionID, function(_, state)
-                                if state == Enum.UserInputState.Begin then Callback() end
+                                if state == Enum.UserInputState.Begin then Callback(true)
+                                elseif state == Enum.UserInputState.End then Callback(false) end
                                 return Enum.ContextActionResult.Sink
                             end, false, 99999, kc)
                         end
@@ -726,6 +736,7 @@ end
 
 
 local UI = {}
+local ForceUpdates = {}
 local AimFFToggle, TrigFFToggle, ESPFFToggle
 local AimbotTab = Window:CreateTab("Silent Aim", 4483362458)
 local TrigTab   = Window:CreateTab("Triggerbot", 4483362458)
@@ -739,7 +750,20 @@ local AimToggle = AimbotTab:CreateToggle({
    Flag = "Aim_Enabled",
    Callback = function(Value) Config.Aim_Enabled = Value end,
 })
-CASBind(AimbotTab, "Silent Aim Toggle", "CAS_Aim", "Bind_Aim", function() AimToggle:Set(not Config.Aim_Enabled) end)
+CASBind(AimbotTab, "Silent Aim Toggle", "CAS_Aim", "Bind_Aim", function(isBegin)
+    if Config.Aim_HoldMode then
+        Config.Aim_Enabled = isBegin
+        AimToggle:Set(Config.Aim_Enabled)
+    else
+        if isBegin then AimToggle:Set(not Config.Aim_Enabled) end
+    end
+end)
+ForceUpdates.Aim_HoldMode = AimbotTab:CreateToggle({
+   Name = "Hold Mode (Requires Bind)",
+   CurrentValue = Config.Aim_HoldMode,
+   Flag = "Aim_HoldMode",
+   Callback = function(Value) Config.Aim_HoldMode = Value end,
+})
 AimbotTab:CreateToggle({
    Name = "Team Check",
    CurrentValue = Config.Aim_TeamCheck,
@@ -911,7 +935,71 @@ local TrigVisToggle = TrigTab:CreateToggle({
    Flag = "Trig_Enabled",
    Callback = function(Value) Config.Trig_Enabled = Value end,
 })
-CASBind(TrigTab, "Triggerbot Toggle", "CAS_Trig", "Bind_Trig", function() TrigVisToggle:Set(not Config.Trig_Enabled) end)
+CASBind(TrigTab, "Triggerbot Toggle", "CAS_Trig", "Bind_Trig", function(isBegin)
+    if Config.Trig_HoldMode then
+        Config.Trig_Enabled = isBegin
+        TrigVisToggle:Set(Config.Trig_Enabled)
+    else
+        if isBegin then TrigVisToggle:Set(not Config.Trig_Enabled) end
+    end
+end)
+ForceUpdates.Trig_HoldMode = TrigTab:CreateToggle({
+   Name = "Hold Mode (Requires Bind)",
+   CurrentValue = Config.Trig_HoldMode,
+   Flag = "Trig_HoldMode",
+   Callback = function(Value) Config.Trig_HoldMode = Value end,
+})
+local function UpdateTrigDistVisibility()
+    local isDist = Config.Trig_DistanceCheck
+    task.spawn(function()
+        task.wait(0.05)
+        pcall(function()
+            local guiParent = game:GetService("CoreGui")
+            if gethui then pcall(function() guiParent = gethui() end) end
+            local rf = guiParent:FindFirstChild("Rayfield")
+            if not rf then return end
+            for _, desc in ipairs(rf:GetDescendants()) do
+                if desc:IsA("TextLabel") and (string.find(desc.Text, "Max Distance") or string.find(desc.Text, "Distance Input")) and desc.Parent then
+                    desc.Parent.Visible = isDist
+                end
+            end
+        end)
+    end)
+end
+ForceUpdates.Trig_DistanceCheck = TrigTab:CreateToggle({
+   Name = "Distance Check",
+   CurrentValue = Config.Trig_DistanceCheck,
+   Flag = "Trig_DistanceCheck",
+   Callback = function(Value)
+       Config.Trig_DistanceCheck = Value
+       UpdateTrigDistVisibility()
+   end,
+})
+local TrigDistSl
+TrigDistSl = TrigTab:CreateSlider({
+   Name = "Max Distance",
+   Range = {0, 2000},
+   Increment = 10,
+   Suffix = " studs",
+   CurrentValue = Config.Trig_MaxDistance,
+   Flag = "Trig_MaxDistance",
+   Callback = function(Value) Config.Trig_MaxDistance = Value end,
+})
+ForceUpdates.Trig_MaxDistance = TrigDistSl
+TrigTab:CreateInput({
+   Name = "Distance Input",
+   PlaceholderText = "Enter exact distance...",
+   RemoveTextAfterFocusLost = true,
+   Callback = function(Text)
+       local v = tonumber(Text)
+       if v then
+           local clamped = math.clamp(v, 0, 2000)
+           Config.Trig_MaxDistance = clamped
+           pcall(function() TrigDistSl:Set(clamped) end)
+       end
+   end,
+})
+UpdateTrigDistVisibility()
 TrigTab:CreateToggle({
    Name = "Team Check",
    CurrentValue = Config.Trig_TeamCheck,
@@ -1044,7 +1132,7 @@ local AutoReloadTog = MiscTab:CreateToggle({ Name = "Auto Reload", CurrentValue 
 
 MiscTab:CreateSection("Movement Anti-Aim")
 local SpinToggle = MiscTab:CreateToggle({ Name = "Enable Spinbot", CurrentValue = Config.Misc_Spinbot, Flag = "Misc_Spinbot", Callback = function(Value) Config.Misc_Spinbot = Value end })
-CASBind(MiscTab, "Spinbot Toggle", "CAS_Spin", "Bind_Spin", function() SpinToggle:Set(not Config.Misc_Spinbot) end)
+CASBind(MiscTab, "Spinbot Toggle", "CAS_Spin", "Bind_Spin", function(isBegin) if isBegin then SpinToggle:Set(not Config.Misc_Spinbot) end end)
 local SpinSl
 SpinSl = MiscTab:CreateSlider({ Name = "Spin Speed", Range = {0, 5000}, Increment = 10, Suffix = "", CurrentValue = Config.Misc_SpinSpeed, Flag = "Misc_SpinSpeed", Callback = function(Value) Config.Misc_SpinSpeed = Value end })
 MiscTab:CreateInput({
@@ -1060,7 +1148,7 @@ MiscTab:CreateInput({
    end,
 })
 local BhopToggle = MiscTab:CreateToggle({ Name = "Enable Bunny Hop", CurrentValue = Config.Misc_Bhop, Flag = "Misc_Bhop", Callback = function(Value) Config.Misc_Bhop = Value end })
-CASBind(MiscTab, "Bunny Hop Toggle", "CAS_Bhop", "Bind_Bhop", function() BhopToggle:Set(not Config.Misc_Bhop) end)
+CASBind(MiscTab, "Bunny Hop Toggle", "CAS_Bhop", "Bind_Bhop", function(isBegin) if isBegin then BhopToggle:Set(not Config.Misc_Bhop) end end)
 
 local BhopSl
 BhopSl = MiscTab:CreateSlider({ Name = "Bunny Hop Power", Range = {0, 500}, Increment = 1, Suffix = "", CurrentValue = Config.Misc_BhopPower, Flag = "Misc_BhopPower", Callback = function(Value) Config.Misc_BhopPower = Value end })
@@ -1084,7 +1172,7 @@ local CFSToggle = MiscTab:CreateToggle({
    Flag = "Misc_CFSpeedEnabled",
    Callback = function(Value) Config.Misc_CFSpeedEnabled = Value end,
 })
-CASBind(MiscTab, "CFrame Speed Toggle", "CAS_CFS", "Bind_CFS", function() CFSToggle:Set(not Config.Misc_CFSpeedEnabled) end)
+CASBind(MiscTab, "CFrame Speed Toggle", "CAS_CFS", "Bind_CFS", function(isBegin) if isBegin then CFSToggle:Set(not Config.Misc_CFSpeedEnabled) end end)
 local CFSSlider
 CFSSlider = MiscTab:CreateSlider({ Name = "CFrame Speed Amount", Range = {0, 1.5}, Increment = 0.001, Suffix = "", CurrentValue = Config.Misc_CFSpeed, Flag = "Misc_CFSpeed", Callback = function(Value) Config.Misc_CFSpeed = Value end })
 MiscTab:CreateInput({
@@ -1107,7 +1195,7 @@ local CFFToggle = MiscTab:CreateToggle({
    Flag = "Misc_CFFlyEnabled",
    Callback = function(Value) Config.Misc_CFFlyEnabled = Value end,
 })
-CASBind(MiscTab, "CFrame Fly Toggle", "CAS_CFF", "Bind_CFF", function() CFFToggle:Set(not Config.Misc_CFFlyEnabled) end)
+CASBind(MiscTab, "CFrame Fly Toggle", "CAS_CFF", "Bind_CFF", function(isBegin) if isBegin then CFFToggle:Set(not Config.Misc_CFFlyEnabled) end end)
 local CFFSlider
 CFFSlider = MiscTab:CreateSlider({ Name = "CFrame Fly Speed", Range = {0, 1.5}, Increment = 0.001, Suffix = "", CurrentValue = Config.Misc_CFFlySpeed, Flag = "Misc_CFFlySpeed", Callback = function(Value) Config.Misc_CFFlySpeed = Value end })
 MiscTab:CreateInput({
@@ -1146,6 +1234,12 @@ end
 
 local function deserializeIntoConfig(json)
     local data = HttpService:JSONDecode(json)
+    
+    if data.Aim_HoldMode == nil then Config.Aim_HoldMode = false end
+    if data.Trig_HoldMode == nil then Config.Trig_HoldMode = false end
+    if data.Trig_DistanceCheck == nil then Config.Trig_DistanceCheck = false end
+    if data.Trig_MaxDistance == nil then Config.Trig_MaxDistance = 500 end
+
     for key, val in pairs(data) do
         if type(val) == "table" and val._t == "c3" then
             Config[key] = Color3.new(val.R, val.G, val.B)
@@ -1187,6 +1281,8 @@ local function refreshUI()
         -- Use specific toggle references for ESP components to force visual sync
         if ESP_Toggles[key] then
             pcall(function() ESP_Toggles[key]:Set(val) end)
+        elseif ForceUpdates[key] then
+            pcall(function() ForceUpdates[key]:Set(val) end)
         else
             local flag = Rayfield.Flags[key]
             if flag then
@@ -1226,6 +1322,7 @@ local function refreshUI()
     -- Refresh visibility of grouped elements
     pcall(UpdateWeightVisibility)
     pcall(UpdateMissVisibility)
+    pcall(UpdateTrigDistVisibility)
     pcall(UpdateClassFilterVisibility)
     pcall(updateMasterButtonText)
 end
