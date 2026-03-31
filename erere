@@ -1,1 +1,155 @@
-rere
+local Players           = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UIS               = game:GetService("UserInputService")
+local LocalPlayer       = Players.LocalPlayer
+
+local Config = getgenv().Config
+
+local function getBestPart(char)
+    local tType = Config.TargetType
+    if tType == "Closest" then
+        local parts = {"Head", "UpperTorso", "LowerTorso", "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg"}
+        local cam = workspace.CurrentCamera
+        local mouse = UIS:GetMouseLocation()
+        local bestPart = nil
+        local shortest = math.huge
+        for _, name in ipairs(parts) do
+            local p = char:FindFirstChild(name)
+            if p then
+                local sPos, onScreen = cam:WorldToViewportPoint(p.Position)
+                if onScreen then
+                    local dist = (Vector2.new(sPos.X, sPos.Y) - mouse).Magnitude
+                    if dist < shortest then
+                        shortest = dist
+                        bestPart = p
+                    end
+                end
+            end
+        end
+        return bestPart
+    elseif tType == "Randomized" then
+        local total = Config.Weight_Head + Config.Weight_Torso + Config.Weight_Limbs
+        if total <= 0 then return char:FindFirstChild("UpperTorso") or char:FindFirstChild("HumanoidRootPart") end
+        local roll = math.random(1, total)
+        if roll <= Config.Weight_Head then
+            return char:FindFirstChild("Head")
+        elseif roll <= Config.Weight_Head + Config.Weight_Torso then
+            local torsos = {}
+            if char:FindFirstChild("UpperTorso") then table.insert(torsos, char.UpperTorso) end
+            if char:FindFirstChild("LowerTorso") then table.insert(torsos, char.LowerTorso) end
+            if #torsos == 0 then return char:FindFirstChild("HumanoidRootPart") end
+            return torsos[math.random(1, #torsos)]
+        else
+            local limbs = {"LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm", "LeftUpperLeg", "RightUpperLeg", "LeftLowerLeg", "RightLowerLeg"}
+            local valid = {}
+            for _, n in ipairs(limbs) do
+                if char:FindFirstChild(n) then table.insert(valid, char[n]) end
+            end
+            if #valid == 0 then return char:FindFirstChild("HumanoidRootPart") end
+            return valid[math.random(1, #valid)]
+        end
+    else
+        return char:FindFirstChild(tType)
+    end
+end
+
+local function getClosestEnemyTarget()
+    local bestPlayer, bestPart = nil, nil
+    local bestDist = Config.FOVRadius
+    local mouse = UIS:GetMouseLocation()
+    local cam   = workspace.CurrentCamera
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == LocalPlayer then continue end
+        local char = plr.Character
+        if not char then continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then continue end
+        if Config.Aim_TeamCheck and plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then
+            continue
+        end
+        if Config.Aim_FFCheck and char:FindFirstChildOfClass("ForceField") then
+            continue
+        end
+        local part = getBestPart(char)
+        if not part then continue end
+        local screenPos, onScreen = cam:WorldToViewportPoint(part.Position)
+        if not onScreen then continue end
+        if Config.Aim_WallCheck then
+            local origin = cam.CFrame.Position
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head") then
+                origin = LocalPlayer.Character.Head.Position
+            end
+            local params = RaycastParams.new()
+            params.FilterDescendantsInstances = { LocalPlayer.Character, char }
+            params.FilterType     = Enum.RaycastFilterType.Exclude
+            params.IgnoreWater    = true
+            if workspace:Raycast(origin, part.Position - origin, params) then
+                continue
+            end
+        end
+        local dist = (Vector2.new(screenPos.X, screenPos.Y) - mouse).Magnitude
+        if dist < bestDist then
+            bestDist = dist
+            bestPlayer = plr
+            bestPart = part
+        end
+    end
+    return bestPlayer, bestPart
+end
+
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    if method == "FireServer"
+        and typeof(self) == "Instance"
+        and self.Parent and self.Parent.Name == "ServerEvents"
+        and self.Parent.Parent == ReplicatedStorage
+        and Config.Aim_Enabled
+    then
+        if self.Name == "Shoot" then
+            if Config.Aim_MissEnabled and math.random(1, 100) <= Config.Aim_MissChance then
+                setnamecallmethod(method)
+                return oldNamecall(self, ...)
+            end
+            local args  = { ... }
+            local nArgs = select("#", ...)
+            local targetPlr, targetPart = getClosestEnemyTarget()
+            if targetPlr and targetPart then
+                local headPos = targetPart.Position
+                args[2] = headPos
+                args[4] = 0
+                args[5] = {
+                    { ["Instance"] = targetPart, ["Material"] = Enum.Material.Plastic, ["Normal"] = Vector3.new(0, 1, 0), ["Position"] = headPos }
+                }
+                local prevChar = nil
+                if type(args[1]) == "table" and args[1].Character then
+                    prevChar = args[1].Character
+                    args[1].Character = targetPlr.Character
+                end
+                setnamecallmethod(method)
+                local result = oldNamecall(self, unpack(args, 1, nArgs))
+                if prevChar then args[1].Character = prevChar end
+                return result
+            end
+        elseif self.Name == "LookAngle" then
+            local args  = { ... }
+            local nArgs = select("#", ...)
+            local targetPlr, targetPart = getClosestEnemyTarget()
+            if targetPlr and targetPart then
+                local cam = workspace.CurrentCamera
+                args[2] = targetPart.Position - cam.CFrame.Position
+                local prevChar = nil
+                if type(args[1]) == "table" and args[1].Character then
+                    prevChar = args[1].Character
+                    args[1].Character = targetPlr.Character
+                end
+                setnamecallmethod(method)
+                local result = oldNamecall(self, unpack(args, 1, nArgs))
+                if prevChar then args[1].Character = prevChar end
+                return result
+            end
+        end
+    end
+    setnamecallmethod(method)
+    return oldNamecall(self, ...)
+end))
