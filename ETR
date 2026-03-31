@@ -71,6 +71,7 @@ getgenv().Config = {
     ESP_ToolColor = Color3.fromRGB(255, 165, 0),
     ESP_ClassColor= Color3.fromRGB(147, 112, 219),
     Misc_AutoReload     = true,
+    Misc_LShiftToggle   = false,
     Misc_Spinbot        = false,
     Misc_SpinSpeed      = 2000,
     Misc_Bhop           = false,
@@ -1127,6 +1128,14 @@ local ESPColorPicker = ESPTab:CreateColorPicker({ Name = "ESP Primary Color", Co
 local ToolColorPicker = ESPTab:CreateColorPicker({ Name = "Tool Text Color", Color = Config.ESP_ToolColor, Flag = "ESP_ToolColor", Callback = function(Value) Config.ESP_ToolColor = Value end })
 local ClassColorPicker = ESPTab:CreateColorPicker({ Name = "Class Text Color", Color = Config.ESP_ClassColor, Flag = "ESP_ClassColor", Callback = function(Value) Config.ESP_ClassColor = Value end })
 
+MiscTab:CreateSection("Keybind Utilities")
+ForceUpdates.Misc_LShiftToggle = MiscTab:CreateToggle({
+   Name = "LShift Sprint Toggle",
+   CurrentValue = Config.Misc_LShiftToggle,
+   Flag = "Misc_LShiftToggle",
+   Callback = function(Value) Config.Misc_LShiftToggle = Value end
+})
+
 MiscTab:CreateSection("Weapon Automation")
 local AutoReloadTog = MiscTab:CreateToggle({ Name = "Auto Reload", CurrentValue = Config.Misc_AutoReload, Flag = "Misc_AutoReload", Callback = function(Value) Config.Misc_AutoReload = Value end })
 
@@ -1239,6 +1248,7 @@ local function deserializeIntoConfig(json)
     if data.Trig_HoldMode == nil then Config.Trig_HoldMode = false end
     if data.Trig_DistanceCheck == nil then Config.Trig_DistanceCheck = false end
     if data.Trig_MaxDistance == nil then Config.Trig_MaxDistance = 500 end
+    if data.Misc_LShiftToggle == nil then Config.Misc_LShiftToggle = false end
 
     for key, val in pairs(data) do
         if type(val) == "table" and val._t == "c3" then
@@ -1555,3 +1565,35 @@ AimbotTab:CreateButton({
       CopyDiscord()
    end,
 })
+
+local isMacroHolding = false
+local SprintToggleState_Macro = false
+
+UIS.InputEnded:Connect(function(input, gameProcessed)
+    if isMacroHolding then return end
+
+    if input.KeyCode == Enum.KeyCode.LeftShift then
+        if Config.Misc_LShiftToggle then
+            SprintToggleState_Macro = not SprintToggleState_Macro
+            
+            if SprintToggleState_Macro then
+                isMacroHolding = true
+                task.spawn(function()
+                    local VIM = game:GetService("VirtualInputManager")
+                    VIM:SendKeyEvent(true, Enum.KeyCode.LeftShift, false, game)
+                end)
+            else
+                task.spawn(function()
+                    local VIM = game:GetService("VirtualInputManager")
+                    VIM:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
+                end)
+            end
+        end
+    end
+end)
+
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if input.KeyCode == Enum.KeyCode.LeftShift then
+        isMacroHolding = false
+    end
+end)
