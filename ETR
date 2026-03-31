@@ -51,6 +51,8 @@ getgenv().Config = {
     Trig_MaxDistance = 500,
     Aim_HoldMode   = false,
     Trig_HoldMode  = false,
+    Aim_ActivationMode = "Toggle via Keybind",
+    Trig_ActivationMode = "Toggle via Keybind",
     ESP_Enabled   = false,
     ESP_MedicMode = false,
     ESP_Boxes     = false,
@@ -683,57 +685,69 @@ local function CopyDiscord()
 end
 local CAS = game:GetService("ContextActionService")
 local keybindElements = {}
+
 local function CASBind(Tab, Name, ActionID, ConfigKey, Callback)
-    local currentKeycode = nil
-    local keybindObj
-    keybindObj = Tab:CreateKeybind({
+    local keybindObj = Tab:CreateKeybind({
         Name = Name,
         CurrentKeybind = Config[ConfigKey] or "",
         HoldToInteract = false,
-        Callback = function()
-            -- no-op: CAS handles the actual callback + input sinking
-        end,
+        Callback = function() end,
     })
     keybindElements[ConfigKey] = keybindObj
+
     task.spawn(function()
         local lastKey = Config[ConfigKey] or ""
-        if lastKey ~= "" and lastKey ~= nil then
-            local s, kc = pcall(function() return Enum.KeyCode[tostring(lastKey)] end)
-            if s and kc then
-                currentKeycode = kc
-                CAS:BindActionAtPriority(ActionID, function(_, state)
-                    if state == Enum.UserInputState.Begin then Callback(true)
-                    elseif state == Enum.UserInputState.End then Callback(false) end
-                    return Enum.ContextActionResult.Sink
-                end, false, 99999, kc)
-            end
+
+        local function getEnum(keyStr)
+            if typeof(keyStr) == "EnumItem" then return keyStr end
+            local ks = tostring(keyStr)
+            if ks == "" or ks == "None" then return nil end
+            local s, k = pcall(function() return Enum.KeyCode[ks] end)
+            if s and k then return k end
+            s, k = pcall(function() return Enum.UserInputType[ks] end)
+            if s and k then return k end
+            return nil
         end
+
+        local connBegan
+        local connEnded
+
+        local function updateBind(kc)
+            if connBegan then connBegan:Disconnect() connBegan = nil end
+            if connEnded then connEnded:Disconnect() connEnded = nil end
+            
+            if not kc then return end
+            
+            connBegan = UIS.InputBegan:Connect(function(input, gpe)
+                if UIS:GetFocusedTextBox() then return end
+                if input.KeyCode == kc or input.UserInputType == kc then
+                    Callback(true)
+                end
+            end)
+            connEnded = UIS.InputEnded:Connect(function(input, gpe)
+                if input.KeyCode == kc or input.UserInputType == kc then
+                    Callback(false)
+                end
+            end)
+        end
+
+        if lastKey ~= "" and lastKey ~= nil then
+            updateBind(getEnum(lastKey))
+        end
+
         while task.wait(0.3) do
             pcall(function()
                 local curKey = keybindObj.CurrentKeybind or ""
                 if curKey ~= lastKey then
                     lastKey = curKey
                     Config[ConfigKey] = curKey
-                    if currentKeycode then
-                        CAS:UnbindAction(ActionID)
-                        currentKeycode = nil
-                    end
-                    if curKey ~= "" and curKey ~= nil then
-                        local s, kc = pcall(function() return Enum.KeyCode[tostring(curKey)] end)
-                        if s and kc then
-                            currentKeycode = kc
-                            CAS:BindActionAtPriority(ActionID, function(_, state)
-                                if state == Enum.UserInputState.Begin then Callback(true)
-                                elseif state == Enum.UserInputState.End then Callback(false) end
-                                return Enum.ContextActionResult.Sink
-                            end, false, 99999, kc)
-                        end
-                    end
+                    updateBind(getEnum(curKey))
                 end
             end)
         end
     end)
 end
+
 
 
 local UI = {}
@@ -751,20 +765,31 @@ local AimToggle = AimbotTab:CreateToggle({
    Flag = "Aim_Enabled",
    Callback = function(Value) Config.Aim_Enabled = Value end,
 })
-CASBind(AimbotTab, "Silent Aim Toggle", "CAS_Aim", "Bind_Aim", function(isBegin)
-    if Config.Aim_HoldMode then
+ForceUpdates.Aim_ActivationMode = AimbotTab:CreateDropdown({
+    Name = "Activation Mode",
+    Options = {"Always On", "Toggle via Keybind", "While Key Held", "While Left Click Held", "While Right Click Held"},
+    CurrentOption = Config.Aim_ActivationMode or "Toggle via Keybind",
+    Flag = "Aim_ActivationMode",
+    Callback = function(Options)
+        local opt = Options[1]
+        Config.Aim_ActivationMode = opt
+        if opt == "Always On" then
+            Config.Aim_Enabled = true
+            AimToggle:Set(true)
+        elseif opt:find("Held") or opt == "Toggle via Keybind" then
+            Config.Aim_Enabled = false
+            AimToggle:Set(false)
+        end
+    end,
+})
+CASBind(AimbotTab, "Silent Aim Keybind", "CAS_Aim", "Bind_Aim", function(isBegin)
+    if Config.Aim_ActivationMode == "While Key Held" then
         Config.Aim_Enabled = isBegin
         AimToggle:Set(Config.Aim_Enabled)
-    else
+    elseif Config.Aim_ActivationMode == "Toggle via Keybind" then
         if isBegin then AimToggle:Set(not Config.Aim_Enabled) end
     end
 end)
-ForceUpdates.Aim_HoldMode = AimbotTab:CreateToggle({
-   Name = "Hold Mode (Requires Bind)",
-   CurrentValue = Config.Aim_HoldMode,
-   Flag = "Aim_HoldMode",
-   Callback = function(Value) Config.Aim_HoldMode = Value end,
-})
 AimbotTab:CreateToggle({
    Name = "Team Check",
    CurrentValue = Config.Aim_TeamCheck,
@@ -936,20 +961,31 @@ local TrigVisToggle = TrigTab:CreateToggle({
    Flag = "Trig_Enabled",
    Callback = function(Value) Config.Trig_Enabled = Value end,
 })
-CASBind(TrigTab, "Triggerbot Toggle", "CAS_Trig", "Bind_Trig", function(isBegin)
-    if Config.Trig_HoldMode then
+ForceUpdates.Trig_ActivationMode = TrigTab:CreateDropdown({
+    Name = "Activation Mode",
+    Options = {"Always On", "Toggle via Keybind", "While Key Held", "While Left Click Held", "While Right Click Held"},
+    CurrentOption = Config.Trig_ActivationMode or "Toggle via Keybind",
+    Flag = "Trig_ActivationMode",
+    Callback = function(Options)
+        local opt = Options[1]
+        Config.Trig_ActivationMode = opt
+        if opt == "Always On" then
+            Config.Trig_Enabled = true
+            pcall(function() TrigVisToggle:Set(true) end)
+        elseif opt:find("Held") or opt == "Toggle via Keybind" then
+            Config.Trig_Enabled = false
+            pcall(function() TrigVisToggle:Set(false) end)
+        end
+    end,
+})
+CASBind(TrigTab, "Triggerbot Keybind", "CAS_Trig", "Bind_Trig", function(isBegin)
+    if Config.Trig_ActivationMode == "While Key Held" then
         Config.Trig_Enabled = isBegin
-        TrigVisToggle:Set(Config.Trig_Enabled)
-    else
-        if isBegin then TrigVisToggle:Set(not Config.Trig_Enabled) end
+        pcall(function() TrigVisToggle:Set(Config.Trig_Enabled) end)
+    elseif Config.Trig_ActivationMode == "Toggle via Keybind" then
+        if isBegin then pcall(function() TrigVisToggle:Set(not Config.Trig_Enabled) end) end
     end
 end)
-ForceUpdates.Trig_HoldMode = TrigTab:CreateToggle({
-   Name = "Hold Mode (Requires Bind)",
-   CurrentValue = Config.Trig_HoldMode,
-   Flag = "Trig_HoldMode",
-   Callback = function(Value) Config.Trig_HoldMode = Value end,
-})
 local function UpdateTrigDistVisibility()
     local isDist = Config.Trig_DistanceCheck
     task.spawn(function()
@@ -1220,12 +1256,60 @@ MiscTab:CreateInput({
        end
    end,
 })
+
+UIS.InputBegan:Connect(function(input, gpe)
+    if UIS:GetFocusedTextBox() then return end
+    if input.KeyCode and input.KeyCode ~= Enum.KeyCode.Unknown and gpe then return end
+    
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if Config.Aim_ActivationMode == "While Left Click Held" then
+            Config.Aim_Enabled = true
+            if AimToggle then task.defer(function() pcall(function() AimToggle:Set(true) end) end) end
+        end
+        if Config.Trig_ActivationMode == "While Left Click Held" then
+            Config.Trig_Enabled = true
+            if TrigVisToggle then task.defer(function() pcall(function() TrigVisToggle:Set(true) end) end) end
+        end
+    elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+        if Config.Aim_ActivationMode == "While Right Click Held" then
+            Config.Aim_Enabled = true
+            if AimToggle then task.defer(function() pcall(function() AimToggle:Set(true) end) end) end
+        end
+        if Config.Trig_ActivationMode == "While Right Click Held" then
+            Config.Trig_Enabled = true
+            if TrigVisToggle then task.defer(function() pcall(function() TrigVisToggle:Set(true) end) end) end
+        end
+    end
+end)
+
+UIS.InputEnded:Connect(function(input, gpe)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if Config.Aim_ActivationMode == "While Left Click Held" then
+            Config.Aim_Enabled = false
+            if AimToggle then task.defer(function() pcall(function() AimToggle:Set(false) end) end) end
+        end
+        if Config.Trig_ActivationMode == "While Left Click Held" then
+            Config.Trig_Enabled = false
+            if TrigVisToggle then task.defer(function() pcall(function() TrigVisToggle:Set(false) end) end) end
+        end
+    elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+        if Config.Aim_ActivationMode == "While Right Click Held" then
+            Config.Aim_Enabled = false
+            if AimToggle then task.defer(function() pcall(function() AimToggle:Set(false) end) end) end
+        end
+        if Config.Trig_ActivationMode == "While Right Click Held" then
+            Config.Trig_Enabled = false
+            if TrigVisToggle then task.defer(function() pcall(function() TrigVisToggle:Set(false) end) end) end
+        end
+    end
+end)
+
 -- ═══════════ CONFIG SYSTEM ═══════════
 local HttpService = game:GetService("HttpService")
 local CONFIG_FOLDER = "ObsessionConfigs"
 if not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
 
-local DROPDOWN_KEYS = { TargetType = true }
+local DROPDOWN_KEYS = { TargetType = true, Aim_ActivationMode = true, Trig_ActivationMode = true }
 
 local function serializeConfig()
     local data = {}
@@ -1244,6 +1328,8 @@ end
 local function deserializeIntoConfig(json)
     local data = HttpService:JSONDecode(json)
     
+    if data.Aim_ActivationMode == nil then Config.Aim_ActivationMode = "Toggle via Keybind" end
+    if data.Trig_ActivationMode == nil then Config.Trig_ActivationMode = "Toggle via Keybind" end
     if data.Aim_HoldMode == nil then Config.Aim_HoldMode = false end
     if data.Trig_HoldMode == nil then Config.Trig_HoldMode = false end
     if data.Trig_DistanceCheck == nil then Config.Trig_DistanceCheck = false end
@@ -1292,7 +1378,13 @@ local function refreshUI()
         if ESP_Toggles[key] then
             pcall(function() ESP_Toggles[key]:Set(val) end)
         elseif ForceUpdates[key] then
-            pcall(function() ForceUpdates[key]:Set(val) end)
+            pcall(function()
+                if DROPDOWN_KEYS[key] then
+                    ForceUpdates[key]:Set({val})
+                else
+                    ForceUpdates[key]:Set(val)
+                end
+            end)
         else
             local flag = Rayfield.Flags[key]
             if flag then
