@@ -529,7 +529,7 @@ local function getBestPart(char)
     if tType == "Closest" then
         local parts = {"Head", "UpperTorso", "LowerTorso", "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg"}
         local cam = workspace.CurrentCamera
-        local mouse = GetAimScreenPoint()
+        local mouse = UIS:GetMouseLocation()
         local bestPart = nil
         local shortest = math.huge
         for _, name in ipairs(parts) do
@@ -574,7 +574,7 @@ end
 local function getClosestEnemyTarget()
     local bestPlayer, bestPart = nil, nil
     local bestDist = Config.FOVRadius
-    local mouse = GetAimScreenPoint()
+    local mouse = UIS:GetMouseLocation()
     local cam   = workspace.CurrentCamera
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr == LocalPlayer then continue end
@@ -1585,23 +1585,13 @@ local function CASBind(Tab, Name, ActionID, ConfigKey, Callback)
         local lastKey = Config[ConfigKey] or ""
 
         local function getEnum(keyStr)
-            if typeof(keyStr) == "EnumItem" then
-                if keyStr.EnumType == Enum.UserInputType and TOUCH_INPUT_TYPES[keyStr] then
-                    return nil
-                end
-                return keyStr
-            end
+            if typeof(keyStr) == "EnumItem" then return keyStr end
             local ks = tostring(keyStr)
             if ks == "" or ks == "None" then return nil end
             local s, k = pcall(function() return Enum.KeyCode[ks] end)
             if s and k then return k end
             s, k = pcall(function() return Enum.UserInputType[ks] end)
-            if s and k then
-                if TOUCH_INPUT_TYPES[k] then
-                    return nil
-                end
-                return k
-            end
+            if s and k then return k end
             return nil
         end
 
@@ -1620,11 +1610,7 @@ local function CASBind(Tab, Name, ActionID, ConfigKey, Callback)
                     Callback(false)
                 end
                 
-                local inputType = inputObject and inputObject.UserInputType
-                if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.MouseButton2 then
-                    return Enum.ContextActionResult.Pass
-                end
-                if inputType and TOUCH_INPUT_TYPES[inputType] then
+                if inputObject.UserInputType == Enum.UserInputType.MouseButton1 or inputObject.UserInputType == Enum.UserInputType.MouseButton2 then
                     return Enum.ContextActionResult.Pass
                 end
                 
