@@ -166,6 +166,16 @@ getgenv().Config = {
     Bind_CFS  = "",
     Bind_CFF  = "",
 }
+local ESP_DRAW_TEXT_BIAS = 1
+local function NormalizeESPTextSize(v)
+    local n = tonumber(v) or 16
+    n = math.clamp(math.floor(n + 0.5), 8, 36)
+    return n
+end
+local function GetRenderESPTextSize()
+    return NormalizeESPTextSize(Config.ESP_TextSize) + ESP_DRAW_TEXT_BIAS
+end
+Config.ESP_TextSize = NormalizeESPTextSize(Config.ESP_TextSize)
 local function SupportsDrawing()
     local ok, drawNew = pcall(function()
         return Drawing and Drawing.new
@@ -427,33 +437,34 @@ RunService.RenderStepped:Connect(function()
             else
                 esp.Box.Visible = false
             end
-            local currentOffset = headPos.Y - (Config.ESP_TextSize + 4)
+            local espTextSize = GetRenderESPTextSize()
+            local currentOffset = headPos.Y - (espTextSize + 4)
             if Config.ESP_Names then
                 esp.Name.Text = plr.Name
-                esp.Name.Size = Config.ESP_TextSize
+                esp.Name.Size = espTextSize
                 esp.Name.Position = Vector2.new(rootPos.X, currentOffset)
                 esp.Name.Color = currentESPColor
                 esp.Name.Visible = true
-                currentOffset = currentOffset - (Config.ESP_TextSize + 4)
+                currentOffset = currentOffset - (espTextSize + 4)
             else
-                esp.Name.Size = Config.ESP_TextSize
+                esp.Name.Size = espTextSize
                 esp.Name.Visible = false
             end
             if Config.ESP_Tools then
                 local equippedTool = char:FindFirstChildOfClass("Tool")
                 if equippedTool then
                     esp.Tool.Text = equippedTool.Name
-                    esp.Tool.Size = Config.ESP_TextSize
+                    esp.Tool.Size = espTextSize
                     esp.Tool.Position = Vector2.new(rootPos.X, currentOffset)
                     esp.Tool.Color = Config.ESP_ToolColor
                     esp.Tool.Visible = true
-                    currentOffset = currentOffset - (Config.ESP_TextSize + 4)
+                    currentOffset = currentOffset - (espTextSize + 4)
                 else
-                    esp.Tool.Size = Config.ESP_TextSize
+                    esp.Tool.Size = espTextSize
                     esp.Tool.Visible = false
                 end
             else
-                esp.Tool.Size = Config.ESP_TextSize
+                esp.Tool.Size = espTextSize
                 esp.Tool.Visible = false
             end
             local pClassObj = plr:GetAttribute("Class")
@@ -469,27 +480,27 @@ RunService.RenderStepped:Connect(function()
                 end
                 if shouldDraw then
                     esp.Class.Text = "[" .. string.upper(pClassStr) .. "]"
-                    esp.Class.Size = Config.ESP_TextSize
+                    esp.Class.Size = espTextSize
                     esp.Class.Position = Vector2.new(rootPos.X, currentOffset)
                     esp.Class.Color = Config.ESP_ClassColor
                     esp.Class.Visible = true
-                    currentOffset = currentOffset - (Config.ESP_TextSize + 4)
+                    currentOffset = currentOffset - (espTextSize + 4)
                 else
-                    esp.Class.Size = Config.ESP_TextSize
+                    esp.Class.Size = espTextSize
                     esp.Class.Visible = false
                 end
             else
-                esp.Class.Size = Config.ESP_TextSize
+                esp.Class.Size = espTextSize
                 esp.Class.Visible = false
             end
             if isReviveable then
                 esp.Revive.Text = "[REVIVEABLE]"
-                esp.Revive.Size = Config.ESP_TextSize
+                esp.Revive.Size = espTextSize
                 esp.Revive.Position = Vector2.new(rootPos.X, currentOffset)
                 esp.Revive.Color = Color3.fromRGB(50, 255, 50)
                 esp.Revive.Visible = true
             else
-                esp.Revive.Size = Config.ESP_TextSize
+                esp.Revive.Size = espTextSize
                 esp.Revive.Visible = false
             end
             if Config.ESP_Health and isAlive then
@@ -529,7 +540,7 @@ local function getBestPart(char)
     if tType == "Closest" then
         local parts = {"Head", "UpperTorso", "LowerTorso", "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg"}
         local cam = workspace.CurrentCamera
-        local mouse = UIS:GetMouseLocation()
+        local mouse = GetAimScreenPoint()
         local bestPart = nil
         local shortest = math.huge
         for _, name in ipairs(parts) do
@@ -573,8 +584,9 @@ local function getBestPart(char)
 end
 local function getClosestEnemyTarget()
     local bestPlayer, bestPart = nil, nil
-    local bestDist = Config.FOVRadius
-    local mouse = UIS:GetMouseLocation()
+    local maxFOV = math.max(0, tonumber(Config.FOVRadius) or 0)
+    local bestDist = maxFOV
+    local mouse = GetAimScreenPoint()
     local cam   = workspace.CurrentCamera
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr == LocalPlayer then continue end
@@ -606,7 +618,7 @@ local function getClosestEnemyTarget()
             end
         end
         local dist = (Vector2.new(screenPos.X, screenPos.Y) - mouse).Magnitude
-        if dist < bestDist then
+        if dist <= maxFOV and dist < bestDist then
             bestDist = dist
             bestPlayer = plr
             bestPart = part
@@ -2045,7 +2057,17 @@ end
 updateMasterButtonText()
 UpdateClassFilterVisibility()
 ESPTab:CreateSection("Typography & Health")
-ESPTab:CreateSlider({ Name = "Text Size", Range = {8, 36}, Increment = 1, Suffix = "px", CurrentValue = Config.ESP_TextSize, Flag = "ESP_TextSize", Callback = function(Value) Config.ESP_TextSize = Value end })
+ForceUpdates.ESP_TextSize = ESPTab:CreateSlider({
+   Name = "Text Size",
+   Range = {8, 36},
+   Increment = 1,
+   Suffix = "px",
+   CurrentValue = NormalizeESPTextSize(Config.ESP_TextSize),
+   Flag = "ESP_TextSize",
+   Callback = function(Value)
+       Config.ESP_TextSize = NormalizeESPTextSize(Value)
+   end
+})
 ESPTab:CreateSection("Miscellaneous Colors")
 local ESPColorPicker = ESPTab:CreateColorPicker({ Name = "ESP Primary Color", Color = Config.ESP_Color, Flag = "ESP_Color", Callback = function(Value) Config.ESP_Color = Value end })
 local ToolColorPicker = ESPTab:CreateColorPicker({ Name = "Tool Text Color", Color = Config.ESP_ToolColor, Flag = "ESP_ToolColor", Callback = function(Value) Config.ESP_ToolColor = Value end })
@@ -2239,6 +2261,7 @@ local function deserializeIntoConfig(json)
             Config[key] = val
         end
     end
+    Config.ESP_TextSize = NormalizeESPTextSize(Config.ESP_TextSize)
 end
 
 local function getConfigList()
@@ -2255,6 +2278,7 @@ end
 
 local function refreshUI()
     if not Rayfield or not Rayfield.Flags then return end
+    Config.ESP_TextSize = NormalizeESPTextSize(Config.ESP_TextSize)
     
     -- Sync standard flags
     for key, val in pairs(Config) do
